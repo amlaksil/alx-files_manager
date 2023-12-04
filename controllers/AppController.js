@@ -38,12 +38,6 @@ const AppController = {
         db: dbStatus,
       };
       res.status(200).json(status);
-    } else {
-      const status = {
-        redis: redisStatus,
-        db: dbStatus,
-      };
-      res.status(500).json(status);
     }
   },
 
