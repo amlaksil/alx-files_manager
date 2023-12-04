@@ -32,12 +32,19 @@ let nbFiles = null;
 
 const AppController = {
   getStatus: (req, res) => {
-    const status = {
-      redis: redisStatus,
-      db: dbStatus,
-    };
-
-    res.status(200).json(status);
+    if (redisStatus && dbStatus) {
+      const status = {
+        redis: redisStatus,
+        db: dbStatus,
+      };
+      res.status(200).json(status);
+    } else {
+      const status = {
+        redis: redisStatus,
+        db: dbStatus,
+      };
+      res.status(500).json(status);
+    }
   },
 
   getStats: (req, res) => {
