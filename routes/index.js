@@ -1,9 +1,16 @@
 const AppController = require('../controllers/AppController');
+const AuthController = require('../controllers/AuthController');
 const UsersController = require('../controllers/UsersController');
 
-module.exports = function routes(app) {
+function routes(app) {
   app.get('/status', AppController.getStatus);
   app.get('/stats', AppController.getStats);
 
-	app.post('/users', UsersController.postNew);
-};
+  app.get('/connect', AuthController.getConnect);
+  app.get('/disconnect', AuthController.getDisconnect);
+  app.get('/users/me', UsersController.getMe);
+
+  app.post('/users', UsersController.postNew);
+}
+
+module.exports = routes;

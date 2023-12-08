@@ -23,7 +23,7 @@ let nbUsers = null;
 let nbFiles = null;
 
 (async () => {
-  redisStatus = redisClient.isAlive();
+  redisStatus = await redisClient.isAlive();
   await waitConnection();
   dbStatus = dbClient.isAlive();
   nbUsers = await dbClient.nbUsers();
@@ -32,13 +32,11 @@ let nbFiles = null;
 
 const AppController = {
   getStatus: (req, res) => {
-    if (redisStatus && dbStatus) {
-      const status = {
-        redis: redisStatus,
-        db: dbStatus,
-      };
-      res.status(200).json(status);
-    }
+    const status = {
+      redis: redisStatus,
+      db: dbStatus,
+    };
+    res.status(200).json(status);
   },
 
   getStats: (req, res) => {
