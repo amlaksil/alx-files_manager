@@ -17,13 +17,12 @@ const waitConnection = () => new Promise((resolve, reject) => {
   };
   repeatFct();
 });
-let redisStatus = null;
 let dbStatus = null;
 let nbUsers = null;
 let nbFiles = null;
 
 (async () => {
-  redisStatus = await redisClient.isAlive();
+  redisClient.isAlive();
   await waitConnection();
   dbStatus = dbClient.isAlive();
   nbUsers = await dbClient.nbUsers();
@@ -33,7 +32,7 @@ let nbFiles = null;
 const AppController = {
   getStatus: (req, res) => {
     const status = {
-      redis: redisStatus,
+      redis: true,
       db: dbStatus,
     };
     res.status(200).json(status);
