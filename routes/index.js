@@ -1,16 +1,17 @@
+const express = require('express');
 const AppController = require('../controllers/AppController');
+const { UsersController, UserController } = require('../controllers/UsersController');
 const AuthController = require('../controllers/AuthController');
-const UsersController = require('../controllers/UsersController');
 
-function routes(app) {
-  app.get('/status', AppController.getStatus);
-  app.get('/stats', AppController.getStats);
+const router = express.Router();
 
-  app.get('/connect', AuthController.getConnect);
-  app.get('/disconnect', AuthController.getDisconnect);
-  app.get('/users/me', UsersController.getMe);
+router.get('/status', AppController.getStatus);
+router.get('/stats', AppController.getStats);
 
-  app.post('/users', UsersController.postNew);
-}
+router.get('/connect', AuthController.getConnect);
+router.get('/disconnect', AuthController.getDisconnect);
+router.get('/users/me', UserController.getMe);
 
-module.exports = routes;
+router.post('/users', UsersController.postNew);
+
+module.exports = router;
