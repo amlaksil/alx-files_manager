@@ -1,49 +1,24 @@
-import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
-
-const waitConnection = () => new Promise((resolve, reject) => {
-  let i = 0;
-  const repeatFct = async () => {
-    await setTimeout(() => {
-      i += 1;
-      if (i >= 10) {
-        reject();
-      } else if (!dbClient.isAlive()) {
-        repeatFct();
-      } else {
-        resolve();
-      }
-    }, 1000);
-  };
-  repeatFct();
-});
-let dbStatus = null;
-let nbUsers = null;
-let nbFiles = null;
-
-(async () => {
-  redisClient.isAlive();
-  await waitConnection();
-  dbStatus = dbClient.isAlive();
-  nbUsers = await dbClient.nbUsers();
-  nbFiles = await dbClient.nbFiles();
-})();
+import dbClient from '../utils/db';
 
 const AppController = {
-  getStatus: (req, res) => {
-    const status = {
-      redis: true,
-      db: dbStatus,
-    };
-    res.status(200).json(status);
+  getStatus: async (req, res) => {
+    const redisAlive = redisClient.isAlive();
+    const dbAlive = dbClient.isAlive();
+
+    return res.status(200).json({ redis: redisAlive, db: dbAlive });
   },
 
-  getStats: (req, res) => {
-    const stats = {
-      users: nbUsers,
-      files: nbFiles,
-    };
-    res.status(200).json(stats);
+  getStats: async (req, res) => {
+    try {
+      const nbUsers = await dbClient.db.collection('users').countDocuments();
+      const nbFiles = await dbClient.db.collection('files').countDocuments();
+
+      return res.status(200).json({ users: nbUsers, files: nbFiles });
+    } catch (error) {
+      console.error('Error retrieving stats:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
   },
 };
 
