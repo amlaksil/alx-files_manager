@@ -1,71 +1,69 @@
 import { v4 as uuidv4 } from 'uuid';
-import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
+import dbClient from '../utils/db';
 
 const crypto = require('crypto');
 
 const AuthController = {
-  getConnect: (req, res) => {
-    const { authorization } = req.headers;
-
-    if (!authorization) {
+  async getConnect(req, res) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Extract email and password from Basic auth header
-    const encodedCredentials = authorization.split(' ')[1];
-    const decodedCredentials = Buffer.from(encodedCredentials, 'base64').toString('utf-8');
+    const encodedCredentials = authHeader.slice('Basic '.length);
+    const decodedCredentials = Buffer.from(encodedCredentials, 'base64').toString();
     const [email, password] = decodedCredentials.split(':');
 
-    // Hash the password using SHA1
-    const hashedPassword = crypto.createHash('sha1').update(password).digest('hex');
-
-    // Find the user associated with the email and hashed password
-    const user = dbClient.db.collection('users').findOne({ email, password: hashedPassword });
-
-    if (!user) {
+    if (!email || !password) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Generate a random token
-    const token = uuidv4();
+    const hashedPassword = crypto
+      .createHash('sha1')
+      .update(password)
+      .digest('hex');
 
-    // Create a key for storing the user ID in Redis
-    const key = `auth_${token}`;
-
-    // Store the user ID in Redis with an expiration of 24 hours
-    redisClient.set(key, user.id, (error, result) => {
-      if (error) {
-        console.error('Error storing token in Redis:', error);
-        return res.status(500).json({ error: 'An error occurred while storing the token' });
-      }
-
-      // Set the expiration time in seconds (24 hours = 86400 seconds)
-      const expirationTime = 86400;
-
-      redisClient.expire(key, expirationTime, (error, result) => {
-        if (error) {
-          console.error('Error setting expiration time in Redis:', error);
-          return res.status(500).json({ error: 'An error occurred while setting the expiration time' });
+    dbClient.db.collection('users')
+      .findOne({ email, password: hashedPassword })
+      .then((user) => {
+        if (!user) {
+          return res.status(401).json({ error: 'Unauthorized' });
         }
-        return result;
+        const token = uuidv4();
+        const key = `auth_${token}`;
+        redisClient.set(key, user._id.toString(), 24 * 60 * 60);
+
+        return res.status(200).json({ token });
+      })
+      .catch((error) => {
+        console.error('Error connecting user:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
       });
-      return result;
-    });
-    return res.status(200).json({ token });
+    return res;
   },
 
-  getDisconnect: (req, res) => {
-    const { 'x-token': token } = req.headers;
-
+  async getDisconnect(req, res) {
+    const token = req.headers['x-token'];
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Delete the token from Redis
-    redisClient.del(`auth_${token}`);
+    try {
+      const key = `auth_${token}`;
+      const userId = await redisClient.get(key);
 
-    return res.sendStatus(204);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      await redisClient.del(key);
+
+      return res.status(204).end();
+    } catch (error) {
+      console.error('Error disconnecting user:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
   },
 };
 

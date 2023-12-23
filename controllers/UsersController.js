@@ -59,45 +59,35 @@ const UsersController = {
       });
     return res;
   },
+};
 
-  getMe: (req, res) => {
-    const { 'X-Token': token } = req.headers;
+const UserController = {
+  getMe: async (req, res) => {
+    const { 'x-token': token } = req.headers;
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Retrieve the user ID from Redis using the token
-    redisClient.get(`auth_${token}`, (err, userId) => {
-      if (err) {
-        console.error('Error retrieving user from Redis:', err);
-        return res.status(500).json({ error: 'An error occurred while retrieving the user' });
-      }
-
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      // Find the user in the database based on the retrieved ID
-      dbClient.db.collection('users')
-        .findOne({ _id: ObjectId(userId) })
-        .then((user) => {
-          if (!user) {
-            return res.status(401).json({ error: 'Unauthorized' });
-          }
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-          const { _id, email } = user;
-          const userData = { id: _id, email };
+      const { _id, email } = user;
+      const userData = { id: _id, email };
 
-          return res.status(200).json(userData);
-        })
-        .catch((err) => {
-          console.error('Error retrieving user from the database:', err);
-          return res.status(500).json({ error: 'An error occurred while retrieving the user' });
-        });
-      return userId;
-    });
-    return res;
+      return res.status(200).json(userData);
+    } catch (err) {
+      console.error('Error retrieving user:', err);
+      return res.status(500).json({ error: 'An error occurred while retrieving the user' });
+    }
   },
 };
 
-module.exports = UsersController;
+module.exports = { UsersController, UserController };
