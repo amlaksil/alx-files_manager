@@ -38,7 +38,6 @@ const FilesController = {
     }
 
     try {
-      // const user = await dbClient.db.collection('users').findOne({ token });
       const userId = await redisClient.getAsync(`auth_${token}`);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -87,6 +86,72 @@ const FilesController = {
     } catch (err) {
       console.error('Error creating file:', err);
       return res.status(500).json({ error: 'An error occurred while creating the file' });
+    }
+  },
+  getShow: async (req, res) => {
+    const { id } = req.params;
+    const { 'x-token': token } = req.headers;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id), userId: user._id });
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      return res.json(file);
+    } catch (err) {
+      console.log('Error retrieving file:', err);
+      return res.status(500).json({ error: 'An error occurred while retrieving the file' });
+    }
+  },
+  getIndex: async (req, res) => {
+    const { 'x-token': token } = req.headers;
+    const { parentId = 0, page = 0 } = req.query;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const pageSize = 20;
+      const skip = parseInt(page, 10) * pageSize;
+
+      const files = await dbClient.db
+        .collection('files')
+        .find({ userId: user._id, parentId })
+        .skip(skip)
+        .limit(pageSize)
+        .toArray();
+
+      return res.json(files);
+    } catch (err) {
+      console.error('Error retrieving files:', err);
+      return res.status(500).json({ error: 'An error occurred while retrieving the files' });
     }
   },
 };
