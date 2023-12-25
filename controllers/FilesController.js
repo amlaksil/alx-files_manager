@@ -6,6 +6,7 @@ const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
 const mime = require('mime-types');
+const fileQueue = require('../fileQueue');
 
 const FOLDER_PATH = process.env.FOLDER_PATH || '/tmp/files_manager';
 
@@ -70,6 +71,12 @@ const FilesController = {
 
       if (type === 'folder') {
         const result = await dbClient.db.collection('files').insertOne(file);
+
+        // Add a job to the fileQueue to generate thumbnails
+        await fileQueue.add({
+          userId: req.user.id,
+          fileId: result.insertedId,
+        });
         const createdFile = { id: result.insertedId, ...file };
         delete createdFile._id;
         return res.status(201).json(createdFile);
@@ -243,6 +250,7 @@ const FilesController = {
   getFile: async (req, res) => {
     const { id } = req.params;
     const { 'x-token': token } = req.headers;
+    const { size } = req.query;
 
     try {
       const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
@@ -255,7 +263,7 @@ const FilesController = {
       const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
 
       // Check if the file is public or if the user is authenticated and is the owner
-      const isPublic = file.isPublic || user._id.equals(ObjectId(file.userId));
+      const isPublic = file.isPublic || (user && user._id.equals(ObjectId(file.userId)));
       if (!isPublic) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -277,8 +285,16 @@ const FilesController = {
       // Set the appropriate Content-Type header
       res.setHeader('Content-Type', mimeType);
 
+      // Generate the thumbnail file path based on the size
+      const thumbnailPath = `${filePath}_${size}`;
+
+      // Check if the thumbnail file exists
+      const thumbnailExists = await fs.exists(thumbnailPath);
+      if (!thumbnailExists) {
+        return res.status(404).json({ error: 'Not found' });
+      }
       // Send the file as the response
-      return res.sendFile(filePath);
+      return res.sendFile(thumbnailPath);
     } catch (err) {
       console.error('Error retrieving file:', err);
       return res.status(500).json({ error: 'An error occurred while retrieving the file', details: err });
