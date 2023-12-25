@@ -242,14 +242,20 @@ const FilesController = {
 
   getFile: async (req, res) => {
     const { id } = req.params;
+    const { 'x-token': token } = req.headers;
 
     try {
       const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
       if (!file) {
         return res.status(404).json({ error: 'Not found' });
       }
+
+      const userId = await redisClient.getAsync(`auth_${token}`);
+
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+
       // Check if the file is public or if the user is authenticated and is the owner
-      const isPublic = file.isPublic || (req.headers.token && file.userId === req.user.id);
+      const isPublic = file.isPublic || user._id.equals(ObjectId(file.userId));
       if (!isPublic) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -260,7 +266,7 @@ const FilesController = {
       }
 
       // Check if the file is locally present
-      const filePath = path.join(FOLDER_PATH, `${file.id}`);
+      const filePath = file.localPath;
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -275,7 +281,7 @@ const FilesController = {
       return res.sendFile(filePath);
     } catch (err) {
       console.error('Error retrieving file:', err);
-      return res.status(500).json({ error: 'An error occurred while retrieving the file' });
+      return res.status(500).json({ error: 'An error occurred while retrieving the file', details: err });
     }
   },
 };
