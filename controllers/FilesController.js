@@ -70,6 +70,7 @@ const FilesController = {
       if (type === 'folder') {
         const result = await dbClient.db.collection('files').insertOne(file);
         const createdFile = { id: result.insertedId, ...file };
+        delete createdFile._id;
         return res.status(201).json(createdFile);
       }
       ensureDirectoryExists(FOLDER_PATH);
@@ -82,6 +83,8 @@ const FilesController = {
 
       const result = await dbClient.db.collection('files').insertOne(file);
       const createdFile = { id: result.insertedId, ...file };
+      delete createdFile._id;
+      delete createdFile.localPath;
       return res.status(201).json(createdFile);
     } catch (err) {
       console.error('Error creating file:', err);
@@ -121,7 +124,7 @@ const FilesController = {
   },
   getIndex: async (req, res) => {
     const { 'x-token': token } = req.headers;
-    const { parentId = 0, page = 0 } = req.query;
+    const { parentId = '0', page = '0' } = req.query;
 
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -140,18 +143,98 @@ const FilesController = {
 
       const pageSize = 20;
       const skip = parseInt(page, 10) * pageSize;
-
-      const files = await dbClient.db
-        .collection('files')
-        .find({ userId: user._id, parentId })
-        .skip(skip)
-        .limit(pageSize)
-        .toArray();
-
+      let files = null;
+      if (parentId === '0') {
+        files = await dbClient.db.collection('files').aggregate([
+          { $match: { userId: user._id } },
+          { $skip: skip },
+          { $limit: pageSize },
+        ])
+          .toArray();
+      } else {
+        files = await dbClient.db
+          .collection('files')
+          .aggregate([
+            { $match: { userId: user._id, _id: ObjectId(parentId) } },
+            { $skip: skip },
+            { $limit: pageSize },
+          ])
+          .toArray();
+      }
       return res.json(files);
     } catch (err) {
       console.error('Error retrieving files:', err);
       return res.status(500).json({ error: 'An error occurred while retrieving the files' });
+    }
+  },
+
+  putPublish: async (req, res) => {
+    const { 'x-token': token } = req.headers;
+    const { id } = req.params;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id), userId: user._id });
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      await dbClient.db.collection('files').updateOne({ _id: ObjectId(id) }, { $set: { isPublic: true } });
+
+      const updatedFile = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
+
+      return res.json(updatedFile);
+    } catch (err) {
+      console.error('Error updating file:', err);
+      return res.status(500).json({ error: 'An error occurred while updating the file' });
+    }
+  },
+
+  putUnpublish: async (req, res) => {
+    const { 'x-token': token } = req.headers;
+    const { id } = req.params;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id), userId: user._id });
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      await dbClient.db.collection('files').updateOne({ _id: ObjectId(id) }, { $set: { isPublic: false } });
+
+      const updatedFile = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
+
+      return res.json(updatedFile);
+    } catch (err) {
+      console.error('Error updating file:', err);
+      return res.status(500).json({ error: 'An error occurred while updating the file' });
     }
   },
 };
