@@ -250,7 +250,7 @@ const FilesController = {
   getFile: async (req, res) => {
     const { id } = req.params;
     const { 'x-token': token } = req.headers;
-    const { size } = req.query;
+    // const { size } = req.query;
 
     try {
       const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
@@ -286,15 +286,15 @@ const FilesController = {
       res.setHeader('Content-Type', mimeType);
 
       // Generate the thumbnail file path based on the size
-      const thumbnailPath = `${filePath}_${size}`;
+      // const thumbnailPath = `${filePath}_${size}`;
 
       // Check if the thumbnail file exists
-      const thumbnailExists = await fs.exists(thumbnailPath);
+      /* const thumbnailExists = await fs.exists(thumbnailPath);
       if (!thumbnailExists) {
         return res.status(404).json({ error: 'Not found' });
-      }
+      } */
       // Send the file as the response
-      return res.sendFile(thumbnailPath);
+      return res.sendFile(filePath);
     } catch (err) {
       console.error('Error retrieving file:', err);
       return res.status(500).json({ error: 'An error occurred while retrieving the file', details: err });
