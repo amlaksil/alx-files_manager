@@ -5,6 +5,7 @@ import redisClient from '../utils/redis';
 const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
+const mime = require('mime-types');
 
 const FOLDER_PATH = process.env.FOLDER_PATH || '/tmp/files_manager';
 
@@ -145,11 +146,12 @@ const FilesController = {
       const skip = parseInt(page, 10) * pageSize;
       let files = null;
       if (parentId === '0') {
-        files = await dbClient.db.collection('files').aggregate([
-          { $match: { userId: user._id } },
-          { $skip: skip },
-          { $limit: pageSize },
-        ])
+        files = await dbClient.db
+          .collection('files').aggregate([
+            { $match: { userId: user._id } },
+            { $skip: skip },
+            { $limit: pageSize },
+          ])
           .toArray();
       } else {
         files = await dbClient.db
@@ -235,6 +237,45 @@ const FilesController = {
     } catch (err) {
       console.error('Error updating file:', err);
       return res.status(500).json({ error: 'An error occurred while updating the file' });
+    }
+  },
+
+  getFile: async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      // Check if the file is public or if the user is authenticated and is the owner
+      const isPublic = file.isPublic || (req.headers.token && file.userId === req.user.id);
+      if (!isPublic) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Check if the file is a folder
+      if (file.type === 'folder') {
+        return res.status(400).json({ error: "A folder doesn't have content" });
+      }
+
+      // Check if the file is locally present
+      const filePath = path.join(FOLDER_PATH, `${file.id}`);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Get the MIME-type based on the file name
+      const mimeType = mime.lookup(file.name);
+
+      // Set the appropriate Content-Type header
+      res.setHeader('Content-Type', mimeType);
+
+      // Send the file as the response
+      return res.sendFile(filePath);
+    } catch (err) {
+      console.error('Error retrieving file:', err);
+      return res.status(500).json({ error: 'An error occurred while retrieving the file' });
     }
   },
 };
