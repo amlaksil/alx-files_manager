@@ -6,7 +6,7 @@ const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
 const mime = require('mime-types');
-const fileQueue = require('../fileQueue');
+const { fileQueue } = require('../queue');
 
 const FOLDER_PATH = process.env.FOLDER_PATH || '/tmp/files_manager';
 
@@ -74,7 +74,7 @@ const FilesController = {
 
         // Add a job to the fileQueue to generate thumbnails
         await fileQueue.add({
-          userId: req.user.id,
+          userId: user._id,
           fileId: result.insertedId,
         });
         const createdFile = { id: result.insertedId, ...file };
@@ -250,7 +250,7 @@ const FilesController = {
   getFile: async (req, res) => {
     const { id } = req.params;
     const { 'x-token': token } = req.headers;
-    // const { size } = req.query;
+    const { size } = req.query;
 
     try {
       const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(id) });
@@ -286,13 +286,13 @@ const FilesController = {
       res.setHeader('Content-Type', mimeType);
 
       // Generate the thumbnail file path based on the size
-      // const thumbnailPath = `${filePath}_${size}`;
+      const thumbnailPath = `${filePath}_${size}`;
 
       // Check if the thumbnail file exists
-      /* const thumbnailExists = await fs.exists(thumbnailPath);
+      const thumbnailExists = await fs.exists(thumbnailPath);
       if (!thumbnailExists) {
         return res.status(404).json({ error: 'Not found' });
-      } */
+      }
       // Send the file as the response
       return res.sendFile(filePath);
     } catch (err) {
