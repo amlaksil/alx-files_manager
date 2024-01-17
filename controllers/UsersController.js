@@ -3,6 +3,7 @@ import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
 const crypto = require('crypto');
+const { userQueue } = require('../queue');
 
 const UsersController = {
   postNew: (req, res) => {
@@ -38,13 +39,19 @@ const UsersController = {
         dbClient.db.collection('users')
           .insertOne(newUser)
           .then((result) => {
-            const { insertedId } = result;
+            const { insertedId, userId } = result;
 
             // Return the new user with only the email and id
             const responseUser = {
               id: insertedId,
               email,
             };
+
+            // Add a job to the fileQueue
+            userQueue.add({
+              userId,
+            });
+
             return res.status(201).json(responseUser);
           })
           .catch((err) => {
